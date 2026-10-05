@@ -27,6 +27,9 @@ och uppdatera den när du lär dig något nytt om hur vi vill ha det (se skillen
 
 - Användaren skriver på svenska. Svara på svenska.
 - Committa bara när användaren ber om det.
+- **"Ladda upp" = committa, pusha till `main` och se till att det syns på hemsidan.** Sajten är GitHub Pages
+  (https://sam13karimi.github.io/webgames/) och byggs automatiskt från `main`. Vänta tills bygget är klart
+  (`gh api repos/sam13karimi/webgames/pages/builds/latest`) och kolla att sidan svarar innan du säger att det är klart.
 - Maskinen har **varken Node eller Python**. Använd Edit/Write för filändringar och öppna spelet i webbläsaren med
   `Start-Process <fil>.html` (PowerShell) för att testa. Säg ärligt att något inte är testat om du inte kunnat köra det.
 - Skills för det här repot ligger i `.claude/skills/`:
@@ -37,3 +40,4 @@ och uppdatera den när du lär dig något nytt om hur vi vill ha det (se skillen
 
 <!-- Lägg till korta punkter här när något visar sig viktigt. Datera dem (ÅÅÅÅ-MM-DD). -->
 - 2026-10-05: Slirpong lades till. Användaren vill att spelen gärna är "sladdriga och svåra" snarare än snälla.
+- 2026-10-05: "Ladda upp" betyder både GitHub och hemsidan (GitHub Pages), inte bara push.
