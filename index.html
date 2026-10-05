@@ -50,6 +50,11 @@ h1{font-family:var(--display);font-weight:400;font-size:clamp(48px,10vw,96px);li
   background:repeating-linear-gradient(-45deg,#e23b2e 0 18px,#0f1113 18px 36px);opacity:.35}
 .art.big .name{color:#f3c21b;font-size:clamp(40px,6vw,56px)}
 .art.big .name b{color:#e23b2e;font-weight:400}
+.art.slir{background:linear-gradient(90deg,#2a1210,#0b0d14 50%,#0c1f2a)}
+.art.slir::before,.art.slir::after{content:'';position:absolute;width:12px;border-radius:6px}
+.art.slir::before{top:22%;bottom:22%;left:8%;background:#ff5a36;box-shadow:0 0 20px #ff5a36;transform:rotate(-8deg)}
+.art.slir::after{top:30%;bottom:14%;right:8%;background:#36d6ff;box-shadow:0 0 20px #36d6ff;transform:rotate(6deg)}
+.art.slir .name{font-style:italic;background:linear-gradient(90deg,#ff5a36,#ffcf4a 50%,#36d6ff);-webkit-background-clip:text;background-clip:text;color:transparent;text-shadow:none}
 
 footer{margin-top:48px;color:var(--muted);font-size:13px}
 </style>
@@ -85,6 +90,14 @@ const GAMES = [
     artName: '2BIG<b>4</b>YOU',
     desc: 'Tio dagar på dig att bli jacked. Handla protein, töm kylskåpet och glöm inte att sova.',
     tags: ['Gym', 'Utmaning']
+  },
+  {
+    file: 'slirpong.html',
+    title: 'Slirpong',
+    art: 'slir',
+    artName: 'SLIRPONG',
+    desc: 'Pong på is. Racketen glider, bollen skruvar och går snabbare för varje träff. Mot datorn eller en kompis.',
+    tags: ['Arkad', '2 spelare']
   }
 ];
 

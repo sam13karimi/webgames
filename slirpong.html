@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Slirpong</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Archivo:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{
+  color-scheme: dark;
+  --ink:#0b0d14; --panel:rgba(14,17,26,.88); --line:rgba(241,237,228,.14);
+  --text:#f1ede4; --muted:#9a968d; --p1:#ff5a36; --p2:#36d6ff; --accent:#ffcf4a;
+  --display:'Anton','Impact','Arial Narrow Bold',sans-serif;
+  --body:'Archivo',system-ui,-apple-system,'Segoe UI',sans-serif;
+}
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+[hidden]{display:none!important}
+body{background:var(--ink);color:var(--text);font-family:var(--body);overflow:hidden;user-select:none;-webkit-user-select:none;touch-action:none}
+canvas{position:fixed;inset:0;width:100%;height:100%;display:block}
+.back{position:fixed;top:calc(12px + env(safe-area-inset-top,0px));left:16px;z-index:10;color:var(--muted);text-decoration:none;font-size:13px;font-weight:600;letter-spacing:.08em;text-transform:uppercase}
+.back:hover{color:var(--text)}
+.overlay{position:fixed;inset:0;z-index:5;display:grid;place-items:center;padding:16px;background:rgba(6,8,12,.55);backdrop-filter:blur(3px)}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:28px 28px 24px;max-width:460px;width:100%;text-align:center}
+h1{font-family:var(--display);font-weight:400;font-size:clamp(56px,14vw,88px);line-height:.9;margin:0 0 6px;letter-spacing:.02em;font-style:italic;
+  background:linear-gradient(90deg,var(--p1),var(--accent) 50%,var(--p2));-webkit-background-clip:text;background-clip:text;color:transparent}
+h2{font-family:var(--display);font-weight:400;font-size:48px;line-height:1;margin:0 0 8px;letter-spacing:.02em}
+.sub{color:var(--muted);margin:0 0 22px;line-height:1.5}
+.btns{display:flex;flex-direction:column;gap:10px}
+button{font:800 15px/1 var(--body);letter-spacing:.1em;text-transform:uppercase;padding:15px 18px;border-radius:10px;border:1px solid var(--line);
+  background:rgba(255,255,255,.06);color:var(--text);cursor:pointer;transition:background .15s,transform .1s}
+button:hover,button:focus-visible{background:rgba(255,255,255,.14);outline:none}
+button:active{transform:scale(.98)}
+button.primary{background:var(--accent);color:#16130a;border-color:transparent}
+button.primary:hover{background:#ffdb73}
+.diff{display:flex;gap:6px;justify-content:center;margin:4px 0 2px}
+.diff button{flex:1;padding:10px 6px;font-size:12px}
+.diff button.on{background:rgba(255,255,255,.2);border-color:rgba(255,255,255,.5)}
+.keys{margin-top:20px;font-size:13px;color:var(--muted);line-height:1.7}
+kbd{font:600 12px var(--body);padding:2px 6px;border-radius:4px;background:rgba(255,255,255,.1);color:var(--text)}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<a class="back" href="index.html">← Alla spel</a>
+
+<div class="overlay" id="menu">
+  <div class="box">
+    <h1>SLIRPONG</h1>
+    <p class="sub">Pong på is. Racketen glider, bollen skruvar och blir snabbare för varje träff. Först till 7.</p>
+    <div class="btns">
+      <button class="primary" data-mode="1">1 spelare</button>
+      <div class="diff" id="diff">
+        <button data-d="0">Lätt</button><button data-d="1" class="on">Normal</button><button data-d="2">Brutal</button>
+      </div>
+      <button data-mode="2">2 spelare</button>
+    </div>
+    <div class="keys">
+      Vänster: <kbd>W</kbd> <kbd>S</kbd> &nbsp;·&nbsp; Höger: <kbd>↑</kbd> <kbd>↓</kbd><br>
+      Rör racketen när du träffar för att ge bollen skruv.<br>
+      <kbd>P</kbd> paus · Touch: dra på din sida
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="pause" hidden>
+  <div class="box">
+    <h2>PAUS</h2>
+    <div class="btns">
+      <button class="primary" id="resume">Fortsätt</button>
+      <button id="toMenu1">Meny</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="over" hidden>
+  <div class="box">
+    <h2 id="overTitle">DU VANN</h2>
+    <p class="sub" id="overSub"></p>
+    <div class="btns">
+      <button class="primary" id="again">Spela igen</button>
+      <button id="toMenu2">Meny</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const W = 1280, H = 720, WALL = 14, WIN = 7;
+const P1 = '#ff5a36', P2 = '#36d6ff';
+const cv = document.getElementById('c'), ctx = cv.getContext('2d');
+let dpr = 1, scale = 1, ox = 0, oy = 0;
+
+function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = innerWidth * dpr; cv.height = innerHeight * dpr;
+  scale = Math.min(cv.width / W, cv.height / H);
+  ox = (cv.width - W * scale) / 2; oy = (cv.height - H * scale) / 2;
+}
+addEventListener('resize', resize); resize();
+
+// Fysik: låg friktion och hög acceleration = racketen sladdar
+const ACC = 3400, FRICTION = 1.0, MAXV = 1150, BASE_H = 140;
+const DIFFS = [
+  { acc: .62, err: 150, react: .32, spinRead: 0 },
+  { acc: .82, err: 85,  react: .2,  spinRead: .5 },
+  { acc: 1,   err: 38,  react: .1,  spinRead: .9 },
+];
+let diff = 1;
+
+function makePaddle(x, side, color) {
+  return { x, side, color, y: H / 2, vy: 0, h: BASE_H, w: 18, touchY: null, ai: false, aiT: 0, aiY: H / 2, aiErr: 0 };
+}
+const left = makePaddle(56, -1, P1), right = makePaddle(W - 56, 1, P2);
+const ball = { x: W / 2, y: H / 2, vx: 0, vy: 0, spin: 0, r: 11, squash: 0, trail: [] };
+
+let mode = 1, state = 'menu', score = [0, 0], rally = 0, serveT = 0, serveDir = 1;
+let shake = 0, flash = 0, flashColor = '#fff', particles = [], best = 0;
+
+// ---------- Ljud ----------
+let ac = null;
+function beep(f, d = .07, type = 'square', vol = .06) {
+  if (state === 'menu') return; // tyst demo
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    const o = ac.createOscillator(), g = ac.createGain();
+    o.type = type; o.frequency.value = f;
+    g.gain.setValueAtTime(vol, ac.currentTime);
+    g.gain.exponentialRampToValueAtTime(.0001, ac.currentTime + d);
+    o.connect(g); g.connect(ac.destination); o.start(); o.stop(ac.currentTime + d);
+  } catch (e) {}
+}
+
+// ---------- Input ----------
+const keys = {};
+addEventListener('keydown', e => {
+  keys[e.code] = true;
+  if (['ArrowUp', 'ArrowDown', 'Space'].includes(e.code)) e.preventDefault();
+  if ((e.code === 'KeyP' || e.code === 'Escape') && (state === 'play' || state === 'paused')) togglePause();
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+
+function toField(clientX, clientY) {
+  return { x: (clientX * dpr - ox) / scale, y: (clientY * dpr - oy) / scale };
+}
+function handleTouches(e) {
+  if (state !== 'play') return;
+  left.touchY = null; right.touchY = null;
+  for (const t of e.touches) {
+    const p = toField(t.clientX, t.clientY);
+    if (mode === 1 || p.x < W / 2) left.touchY = p.y; else right.touchY = p.y;
+  }
+}
+cv.addEventListener('touchstart', e => { e.preventDefault(); handleTouches(e); }, { passive: false });
+cv.addEventListener('touchmove', e => { e.preventDefault(); handleTouches(e); }, { passive: false });
+cv.addEventListener('touchend', handleTouches);
+cv.addEventListener('touchcancel', handleTouches);
+
+// ---------- Spelflöde ----------
+const $ = id => document.getElementById(id);
+function show(id) { for (const o of ['menu', 'pause', 'over']) $(o).hidden = o !== id; }
+
+document.querySelectorAll('[data-mode]').forEach(b => b.onclick = () => startGame(+b.dataset.mode));
+document.querySelectorAll('#diff button').forEach(b => b.onclick = () => {
+  diff = +b.dataset.d;
+  document.querySelectorAll('#diff button').forEach(x => x.classList.toggle('on', x === b));
+});
+$('resume').onclick = togglePause;
+$('again').onclick = () => startGame(mode);
+$('toMenu1').onclick = $('toMenu2').onclick = () => { state = 'menu'; score = [0, 0]; newServe(); show('menu'); };
+
+function startGame(m) {
+  mode = m; score = [0, 0]; best = 0;
+  left.ai = false; right.ai = mode === 1;
+  for (const p of [left, right]) { p.y = H / 2; p.vy = 0; p.h = BASE_H; p.touchY = null; }
+  serveDir = Math.random() < .5 ? -1 : 1;
+  newServe(); state = 'play'; show(null); beep(440, .1);
+}
+function newServe() {
+  rally = 0;
+  Object.assign(ball, { x: W / 2, y: H / 2, vx: 0, vy: 0, spin: 0, trail: [] });
+  serveT = 1.0;
+}
+function launch() {
+  const a = (Math.random() - .5) * .9;
+  ball.vx = Math.cos(a) * 560 * serveDir;
+  ball.vy = Math.sin(a) * 560;
+  ball.spin = (Math.random() - .5) * .6;
+  beep(660, .06);
+}
+function togglePause() {
+  if (state === 'play') { state = 'paused'; show('pause'); }
+  else if (state === 'paused') { state = 'play'; show(null); last = performance.now(); }
+}
+document.addEventListener('visibilitychange', () => { if (document.hidden && state === 'play') togglePause(); });
+
+function pointTo(side) { // side 0 = vänster fick poäng, 1 = höger
+  serveDir = side === 0 ? 1 : -1; // serva mot den som förlorade bollen
+  if (state === 'menu') return newServe(); // demoläget räknar inte poäng
+  score[side]++;
+  best = Math.max(best, rally);
+  shake = 18; flash = 1; flashColor = side === 0 ? P1 : P2;
+  burst(side === 0 ? W - 10 : 10, ball.y, side === 0 ? P1 : P2, 40, 700);
+  beep(side === 0 ? 220 : 160, .25, 'sawtooth', .07);
+  if (score[side] >= WIN) {
+    state = 'over';
+    const t = mode === 1 ? (side === 0 ? 'DU VANN' : 'DATORN VANN') : (side === 0 ? 'VÄNSTER VANN' : 'HÖGER VANN');
+    $('overTitle').textContent = t;
+    $('overTitle').style.color = side === 0 ? P1 : P2;
+    $('overSub').textContent = `${score[0]} – ${score[1]} · Längsta rally: ${best} träffar`;
+    setTimeout(() => { if (state === 'over') show('over'); }, 700);
+  } else newServe();
+}
+
+// ---------- Racketar ----------
+function steer(p, target, accMul = 1) {
+  // underdämpad fjäder: översvänger lite, precis som det ska
+  const a = (target - p.y) * 15 - p.vy * 2.4;
+  return Math.max(-ACC * accMul, Math.min(ACC * accMul, a));
+}
+
+function predictY(p) {
+  const d = DIFFS[diff];
+  let x = ball.x, y = ball.y, vx = ball.vx, vy = ball.vy, s = ball.spin * d.spinRead;
+  const dt = 1 / 60;
+  for (let i = 0; i < 240; i++) {
+    vy += s * 520 * dt; s *= Math.exp(-.8 * dt);
+    x += vx * dt; y += vy * dt;
+    if (y < WALL + ball.r) { y = WALL + ball.r; vy = Math.abs(vy); s *= .6; }
+    if (y > H - WALL - ball.r) { y = H - WALL - ball.r; vy = -Math.abs(vy); s *= .6; }
+    if ((p.side > 0 && x >= p.x) || (p.side < 0 && x <= p.x)) break;
+  }
+  return y;
+}
+
+function updatePaddle(p, dt) {
+  let a = 0;
+  if (p.ai) {
+    const d = DIFFS[diff];
+    p.aiT -= dt;
+    const coming = Math.sign(ball.vx) === p.side && serveT <= 0;
+    if (p.aiT <= 0) {
+      p.aiT = d.react;
+      p.aiY = coming ? predictY(p) + p.aiErr : H / 2 + (ball.y - H / 2) * .3;
+    }
+    a = steer(p, p.aiY, d.acc);
+  } else if (p.touchY != null) {
+    a = steer(p, p.touchY);
+  } else {
+    const up = p === left ? (keys.KeyW || (mode === 1 && keys.ArrowUp)) : keys.ArrowUp;
+    const dn = p === left ? (keys.KeyS || (mode === 1 && keys.ArrowDown)) : keys.ArrowDown;
+    a = ((dn ? 1 : 0) - (up ? 1 : 0)) * ACC;
+  }
+  p.vy += a * dt;
+  p.vy *= Math.exp(-FRICTION * dt);
+  p.vy = Math.max(-MAXV, Math.min(MAXV, p.vy));
+  p.y += p.vy * dt;
+
+  // racketen krymper under långa rallyn
+  const targetH = BASE_H * Math.max(.55, 1 - rally * .03);
+  p.h += (targetH - p.h) * Math.min(1, dt * 4);
+
+  const top = WALL + p.h / 2, bot = H - WALL - p.h / 2;
+  if (p.y < top) { p.y = top; p.vy = Math.abs(p.vy) * .45; }
+  if (p.y > bot) { p.y = bot; p.vy = -Math.abs(p.vy) * .45; }
+}
+
+// ---------- Boll ----------
+function hitPaddle(p) {
+  const off = Math.max(-1, Math.min(1, (ball.y - p.y) / (p.h / 2)));
+  const speed = Math.min(Math.hypot(ball.vx, ball.vy) * 1.065 + 15, 1700);
+  let vy = ball.vy * .35 + off * 520 + p.vy * .5;
+  let vx = -p.side * Math.max(speed * .55, Math.sqrt(Math.max(0, speed * speed - vy * vy)));
+  const k = speed / Math.hypot(vx, vy);
+  ball.vx = vx * k; ball.vy = vy * k;
+  ball.spin = ball.spin * .25 + p.vy * .0011;
+  ball.x = p.x - p.side * (p.w / 2 + ball.r + .5);
+  ball.squash = 1;
+  rally++;
+  if (p.ai) p.aiErr = 0;
+  const other = p === left ? right : left;
+  if (other.ai) other.aiErr = (Math.random() * 2 - 1) * DIFFS[diff].err * (.6 + speed / 1700);
+  shake = Math.min(12, 3 + speed / 200);
+  burst(ball.x, ball.y, p.color, 14 + Math.min(20, rally), speed * .4);
+  beep(300 + Math.min(rally, 30) * 18, .06);
+}
+
+function updateBall(dt) {
+  if (serveT > 0) { serveT -= dt; if (serveT <= 0) launch(); return; }
+  const steps = 4, h = dt / steps;
+  for (let i = 0; i < steps; i++) {
+    ball.vy += ball.spin * 520 * h;
+    ball.spin *= Math.exp(-.8 * h);
+    ball.x += ball.vx * h; ball.y += ball.vy * h;
+
+    if (ball.y < WALL + ball.r) { ball.y = WALL + ball.r; ball.vy = Math.abs(ball.vy) * .96; ball.spin *= .6; wallHit(); }
+    if (ball.y > H - WALL - ball.r) { ball.y = H - WALL - ball.r; ball.vy = -Math.abs(ball.vy) * .96; ball.spin *= .6; wallHit(); }
+
+    for (const p of [left, right]) {
+      const face = p.x - p.side * p.w / 2;
+      const towards = Math.sign(ball.vx) === p.side;
+      const inX = p.side > 0 ? ball.x + ball.r >= face && ball.x < p.x + p.w : ball.x - ball.r <= face && ball.x > p.x - p.w;
+      if (towards && inX && Math.abs(ball.y - p.y) < p.h / 2 + ball.r) { hitPaddle(p); break; }
+    }
+    if (ball.x < -40) return pointTo(1);
+    if (ball.x > W + 40) return pointTo(0);
+  }
+  ball.trail.push({ x: ball.x, y: ball.y });
+  if (ball.trail.length > 16) ball.trail.shift();
+  ball.squash *= Math.exp(-10 * dt);
+}
+function wallHit() { shake = Math.max(shake, 3); beep(180, .04, 'triangle', .05); burst(ball.x, ball.y, '#ffffff', 5, 200); }
+
+// ---------- Partiklar ----------
+function burst(x, y, color, n, spd) {
+  for (let i = 0; i < n; i++) {
+    const a = Math.random() * Math.PI * 2, s = Math.random() * spd;
+    particles.push({ x, y, vx: Math.cos(a) * s, vy: Math.sin(a) * s, life: .4 + Math.random() * .4, max: .8, color });
+  }
+}
+function updateParticles(dt) {
+  for (const p of particles) { p.x += p.vx * dt; p.y += p.vy * dt; p.vx *= .94; p.vy *= .94; p.life -= dt; }
+  particles = particles.filter(p => p.life > 0);
+}
+
+// ---------- Rita ----------
+function drawPaddle(p) {
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(p.vy * .00028 * -p.side); // lutar när den glider
+  const sx = 1 + Math.min(.4, Math.abs(p.vy) / 3000);
+  ctx.scale(1 / sx, sx);
+  ctx.shadowColor = p.color; ctx.shadowBlur = 24;
+  ctx.fillStyle = p.color;
+  roundRect(-p.w / 2, -p.h / 2, p.w, p.h, 9); ctx.fill();
+  ctx.restore();
+}
+function roundRect(x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y); ctx.arcTo(x + w, y, x + w, y + h, r); ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r); ctx.arcTo(x, y, x + w, y, r); ctx.closePath();
+}
+
+function draw() {
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#05060a'; ctx.fillRect(0, 0, cv.width, cv.height);
+  const sx = (Math.random() - .5) * shake, sy = (Math.random() - .5) * shake;
+  ctx.setTransform(scale, 0, 0, scale, ox + sx * scale, oy + sy * scale);
+
+  // plan
+  const g = ctx.createLinearGradient(0, 0, W, 0);
+  g.addColorStop(0, '#1a0f12'); g.addColorStop(.5, '#0b0d14'); g.addColorStop(1, '#0c1820');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
+  if (flash > 0) { ctx.globalAlpha = flash * .25; ctx.fillStyle = flashColor; ctx.fillRect(0, 0, W, H); ctx.globalAlpha = 1; }
+
+  // poäng i bakgrunden
+  ctx.font = '400 220px Anton, Impact, sans-serif';
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.fillStyle = 'rgba(255,90,54,.13)'; ctx.fillText(score[0], W / 2 - 170, H / 2);
+  ctx.fillStyle = 'rgba(54,214,255,.13)'; ctx.fillText(score[1], W / 2 + 170, H / 2);
+
+  // mittlinje + väggar
+  ctx.fillStyle = 'rgba(255,255,255,.12)';
+  for (let y = WALL + 10; y < H - WALL; y += 34) ctx.fillRect(W / 2 - 2, y, 4, 18);
+  ctx.fillStyle = 'rgba(255,255,255,.85)';
+  ctx.fillRect(0, 0, W, WALL); ctx.fillRect(0, H - WALL, W, WALL);
+
+  // rally-info
+  ctx.font = '600 15px Archivo, system-ui, sans-serif';
+  ctx.fillStyle = 'rgba(241,237,228,.55)';
+  if (rally > 0) ctx.fillText(`RALLY ${rally}  ·  ${Math.round(Math.hypot(ball.vx, ball.vy) / 10)} KM/H`, W / 2, WALL + 24);
+
+  // partiklar
+  for (const p of particles) {
+    ctx.globalAlpha = Math.max(0, p.life / p.max);
+    ctx.fillStyle = p.color; ctx.fillRect(p.x - 2.5, p.y - 2.5, 5, 5);
+  }
+  ctx.globalAlpha = 1;
+
+  drawPaddle(left); drawPaddle(right);
+
+  // boll + svans (färgen visar skruv)
+  const hue = ball.spin > 0 ? 18 : 195, sat = Math.min(100, Math.abs(ball.spin) * 140);
+  for (let i = 0; i < ball.trail.length; i++) {
+    const t = ball.trail[i], k = i / ball.trail.length;
+    ctx.globalAlpha = k * .5;
+    ctx.fillStyle = `hsl(${hue},${sat}%,70%)`;
+    ctx.beginPath(); ctx.arc(t.x, t.y, ball.r * k, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  ctx.save();
+  ctx.translate(ball.x, ball.y);
+  ctx.rotate(Math.atan2(ball.vy, ball.vx));
+  const sq = ball.squash * .45;
+  ctx.scale(1 - sq, 1 + sq);
+  ctx.shadowColor = `hsl(${hue},${sat}%,70%)`; ctx.shadowBlur = 20;
+  ctx.fillStyle = '#fff';
+  ctx.beginPath(); ctx.arc(0, 0, ball.r, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+
+  // nedräkning
+  if (serveT > 0 && state === 'play') {
+    ctx.font = '400 64px Anton, Impact, sans-serif';
+    ctx.fillStyle = 'rgba(255,207,74,.9)';
+    ctx.fillText(serveDir > 0 ? '→' : '←', W / 2, H / 2 - 70);
+  }
+}
+
+// ---------- Loop ----------
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(.033, (now - last) / 1000); last = now;
+  if (state === 'play') {
+    updatePaddle(left, dt); updatePaddle(right, dt);
+    updateBall(dt);
+  } else if (state === 'menu') {
+    // demo i bakgrunden: två datorer
+    left.ai = right.ai = true;
+    updatePaddle(left, dt); updatePaddle(right, dt);
+    updateBall(dt);
+  }
+  if (state !== 'paused') {
+    updateParticles(dt);
+    shake *= Math.exp(-12 * dt); flash = Math.max(0, flash - dt * 2.5);
+  }
+  draw();
+  requestAnimationFrame(frame);
+}
+left.ai = right.ai = true; newServe();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
